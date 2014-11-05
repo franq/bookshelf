@@ -5,7 +5,7 @@
   <meta http-equiv="X-UA-Compatible" content="chrome=1" />
   <meta name="viewport" content="width=device-width">
   <link rel="canonical" href="http://bookshelfjs.org" />
-  <link rel="icon" href="docs/images/favicon.ico" />
+  <link rel="icon" href="/docs/images/favicon.ico" />
   <link rel="stylesheet" href="/docs/assets/style.css">
   <link rel="stylesheet" href="/docs/assets/highlight.min.css">
   <title>Bookshelf.js - a Javascript ORM for Node.js for PostgreSQL, MySQL, and SQLite3</title>
@@ -27,7 +27,7 @@
   <div id="sidebar" class="interface">
 
     <a class="toc_title" href="#">
-      Bookshelf.js <span class="version">(0.7.5)</span>
+      Bookshelf.js <span class="version">(0.7.9)</span>
     </a>
     <ul class="toc_section">
       <li>&raquo; <a href="http://github.com/tgriesser/bookshelf">GitHub Repository</a></li>
@@ -195,7 +195,7 @@
       and has a comprehensive <a href="https://travis-ci.org/tgriesser/bookshelf">test suite</a>.
     </p>
 
-    <h2>Latest Release: 0.7.5 - <span class="small"><a href="#changelog">Change Log</a></span></h2>
+    <h2>Latest Release: 0.7.9 - <span class="small"><a href="#changelog">Change Log</a></span></h2>
 
     <p>
       Current Develop &mdash;
@@ -345,7 +345,7 @@ var bcrypt   = Promise.promisifyAll(require('bcrypt'));
 var Customer = bookshelf.Model.extend({
 
   initialize: function() {
-    this.on('saving', this.validateSave)
+    this.on('saving', this.validateSave);
   },
 
   validateSave: function() {
@@ -582,7 +582,7 @@ new Book({'ISBN-13': '9780440180296'}).fetch({
 </code></pre>
 
     <p id="Model-fetchAll">
-      <b class="header">fetchAll</b><code>model.fetchAll([options]).then(function(collection) {...</code>
+      <b class="header">fetchAll</b><code>Model.fetchAll / model.fetchAll([options]).then(function(collection) {...</code>
       <br />
       Fetches a <a href="#Collection">collection</a> of models from the database, using any <a href="#Model-query">query</a> parameters currently set on the model to form a <tt>select</tt> query. Returns a promise, which will resolve with the fetched <tt>collection</tt>. If you wish to trigger an error if no models are found, pass <tt>{require: true}</tt> as one of the options to the fetchAll call. A <tt>"fetching"</tt> event will be fired just before the collection is fetched; a good place to hook into for validations. A <tt>"fetched"</tt> event will be fired when a record is successfully retrieved. If you need to constrain the query performed by fetch, you can call the <a href="#Model-query">query</a> method before calling fetch.
     </p>
@@ -640,7 +640,7 @@ var Book = bookshelf.Model.extend({
     return this.hasOne(Summary);
   },
   owner: function() {
-    return this.belongsTo(Author);
+    return this.belongsTo(Owner);
   },
   pages: function() {
     return this.hasMany(Pages);
@@ -664,7 +664,8 @@ new Book({id: 1}).summary().fetch().then(function(summary) {
 
     <p>
       Relations may also be loaded eagerly, by specifying a <tt>withRelated</tt> option
-      during the fetch call.
+      during the fetch call.  Note that the call to related will successfully return an object regardless of whether or not such a
+      relation exists.  To check for the existence of a related object, use the id.
     </p>
 
 <pre><code>
@@ -673,7 +674,7 @@ new Book({id: 2}).fetch({
 }).then(function(book) {
   console.log(book.toJSON());
   var owner = book.related('owner');
-  if (owner) {
+  if (owner.id) {
     console.log(owner.toJSON());
   }
 });
@@ -1040,13 +1041,25 @@ var Post = bookshelf.Model.extend({
 var Photo = bookshelf.Model.extend({
   tableName: 'photos',
   imageable: function() {
-    return this.morphTo('imageable', Site, Author);
+    return this.morphTo('imageable', Site, Post);
   }
 });
 </code></pre>
 
+    <p>
+      Optionally, if you wish to use column names other than the <b>name</b> suffixed with <tt>_type</tt> and <tt>_id</tt>
+      (for example, if you use a different naming convention in your database), you may specify custom <b>columnNames</b>.
+      This argument, when specified, expects an array containing the substitute <tt>_type</tt> and <tt>_id</tt> columns,
+      respectively.
+    </p>
+
+    <p>
+      Note that any custom <b>columnNames</b> must be specified on both ends of the relationship! Examples are provided
+      for each of the polymorphic relationship types individually.
+    </p>
+
     <p id="Model-morphOne">
-      <b class="header">morphOne</b><code>model.morphOne(Target, name, [morphValue])</code>
+      <b class="header">morphOne</b><code>model.morphOne(Target, name, [columnNames], [morphValue])</code>
       <br />
       The <b>morphOne</b> is used to signify a polymorphic relation with another <b>Target</b> model,
       where the <b>name</b> of the model is used to determine which database table keys are used.
@@ -1065,8 +1078,27 @@ var Site = bookshelf.Model.extend({
 });
 </code></pre>
 
+    <p>
+      And with custom columnNames:
+    </p>
+
+<pre><code>
+var Site = bookshelf.Model.extend({
+  tableName: 'sites',
+  photo: function() {
+    return this.morphOne(Photo, 'imageable', ["ImageableType", "ImageableId"]);
+  }
+});
+</code></pre>
+
+    <p>
+      Note that both <b>columnNames</b> and <b>morphValue</b> are optional arguments. How your argument is treated
+      when only one is specified, depends on the type. If your argument is an array, it will be assumed to contain
+      custom <b>columnNames</b>. If it's not, it will be assumed to indicate a <b>morphValue</b>.
+    </p>
+
     <p id="Model-morphMany">
-      <b class="header">morphMany</b><code>model.morphMany(Target, name, [morphValue])</code>
+      <b class="header">morphMany</b><code>model.morphMany(Target, name, [columnNames], [morphValue])</code>
       <br />
       The <b>morphMany</b> property is essentially the same as a morphOne, but creating a collection rather than a
       model (similar to a hasOne vs. hasMany relation). The <b>morphValue</b> may be optionally set to store/retrieve
@@ -1082,8 +1114,25 @@ var Post = bookshelf.Model.extend({
 });
 </code></pre>
 
+    <p>
+      And with custom columnNames:
+    </p>
+
+<pre><code>
+var Post = bookshelf.Model.extend({
+  tableName: 'posts',
+  photos: function() {
+    return this.morphMany(Photo, 'imageable', ["ImageableType", "ImageableId"]);
+  }
+});
+</code></pre>
+
+    <p>
+      The same argument parsing rules apply as for <b>morphOne</b>.
+    </p>
+
     <p id="Model-morphTo">
-      <b class="header">morphTo</b><code>model.morphTo(name, targets*)</code>
+      <b class="header">morphTo</b><code>model.morphTo(name, [columnNames], targets*)</code>
       <br />
       The <b>morphTo</b> relation is used to specify the inverse of the "morphOne" or "morphMany" relations,
       where the <b>targets</b> (constructors) must be passed to signify which models are the potential opposite end of the
@@ -1094,7 +1143,20 @@ var Post = bookshelf.Model.extend({
 var Photo = bookshelf.Model.extend({
   tableName: 'photos',
   imageable: function() {
-    return this.morphTo('imageable', Site, Author);
+    return this.morphTo('imageable', Site, Post);
+  }
+});
+</code></pre>
+
+    <p>
+      And with custom columnNames:
+    </p>
+
+<pre><code>
+var Photo = bookshelf.Model.extend({
+  tableName: 'photos',
+  imageable: function() {
+    return this.morphTo('imageable', ["ImageableType", "ImageableId"], Site, Post);
   }
 });
 </code></pre>
@@ -1405,6 +1467,8 @@ var qb = model.query();
 
 <pre><code>
 var PostModel = bookshelf.Model.extend({
+  // If, for example, you snakify in your `format` function (from model to db)
+  // and camelize in `parse` (from db to model), then you would camelize your model like so:
   hasTimestamps: ['createdAt', 'updatedAt']
 });
 </code></pre>
@@ -1412,11 +1476,12 @@ var PostModel = bookshelf.Model.extend({
     <p id="Model-timestamp">
       <b class="header">timestamp</b><code>model.timestamp(options)</code>
       <br />
-      Sets the timestamp attributes on the model, if <tt>hasTimestamps</tt> is set to true.
-      The default implementation is to check if the model <a href="#Model-isNew">isNew</a> and
-      set the <tt>created_at</tt> and <tt>updated_at</tt> attributes to the current date if it is new,
-      and just the <tt>updated_at</tt> attribute if it isn't. You may override this method if you
-      wish to use different column names or types for the timestamps.
+      Sets the timestamp attributes on the model, if <tt>hasTimestamps</tt> is set to true or an array.
+      The default implementation is to check if the model <a href="#Model-isNew">isNew</a> or if
+      <tt>{method: 'insert'}</tt> is provided as an option and set the <tt>created_at</tt> and
+      <tt>updated_at</tt> attributes to the current date if it is being inserted, and just the
+      <tt>updated_at</tt> attribute if it's being updated. You may override this method if you wish to
+      use different column names or types for the timestamps.
     </p>
 
     <p id="Model-clone">
@@ -2218,6 +2283,16 @@ Bookshelf.transaction(function(t) {
       <tt>Model({id: '1'}).fetch({withRelated: [relations...]})</tt> should work just fine.
     </p>
 
+    <p id="faq-process-exit">
+      <b class="header">My process won't exit after my script is finished, why?</b><br />
+      The issue here is that <tt>Knex</tt>, the database abstraction layer used by <tt>Bookshelf</tt>,
+      uses connection pooling and thus keeps the database connection open. If you want your process to exit after your
+      script has finished, you will have to call <tt>.destroy(cb)</tt> on the <tt>knex</tt> property of
+      your <tt>Bookshelf</tt> instance or on the <tt>Knex</tt> instance passed during initialization.
+      More information about connection pooling can be found over at the
+      <a href="http://knexjs.org/#Installation-pooling">Knex docs</a>.
+    </p>
+
     <p id="faq-debug">
       <b class="header">How do I debug?</b><br />
       If you pass <tt>{debug: true}</tt> as one of the options in your initialize settings, you can see
@@ -2249,11 +2324,6 @@ process.stderr.on('data', function(data) {
     </p>
 
     <p>
-      If you're going to add a test, you should set <tt>$ export BOOKSHELF_DEV=1</tt> which will automatically save the
-      the outputs data from the tests into the <tt>shared/output.js</tt> file.
-    </p>
-
-    <p>
       Also note that you will have to create the appropriate database(s) for the test suite to run. For example, with mysql,
       you'll need to run the command <tt>create database bookshelf_test;</tt> in addition to exporting the correct test settings
       prior to running the test suite.
@@ -2269,7 +2339,40 @@ process.stderr.on('data', function(data) {
     <h2 id="changelog">Change Log</h2>
 
     <p>
-      <b class="header">0.7.5</b> &mdash; <small><i>June 23, 2014</i></small> &mdash; <a href="https://github.com/tgriesser/bookshelf/compare/0.7.3...0.7.4">Diff</a><br />
+      <b class="header">0.7.9</b> &mdash; <small><i>Oct 28, 2014</i></small> &mdash; <a href="https://github.com/tgriesser/bookshelf/compare/0.7.8...0.7.9">Diff</a><br />
+    </p>
+    <ul>
+      <li>Fix for regression in columns / eager fetch query constraints, (#510).</li>
+    </ul>
+
+    <p>
+      <b class="header">0.7.8</b> &mdash; <small><i>Oct 28, 2014</i></small> &mdash; <a href="https://github.com/tgriesser/bookshelf/compare/0.7.7...0.7.8">Diff</a><br />
+    </p>
+    <ul>
+      <li>Timestamp <tt>created_at</tt> is now saved with any insert.</li>
+      <li>Fix for regression created by #429.</li>
+      <li>New events, <tt>attaching</tt>, <tt>attached</tt>, <tt>detaching</tt>, <tt>detached</tt> #452.</li>
+      <li>Ability to specify custom column names in morphTo, #454</li>
+      <li>Fix for stack overflow with model list as arguments, #482</li>
+      <li>Modified location of eager fetch query constraints internally.</li>
+    </ul>
+
+    <p>
+      <b class="header">0.7.7</b> &mdash; <small><i>July 23, 2014</i></small> &mdash; <a href="https://github.com/tgriesser/bookshelf/compare/0.7.6...0.7.7">Diff</a><br />
+    </p>
+    <ul>
+      <li>Fix for formatting on polymorphic keys, (#429).</li>
+      <li>Added a resolve method for specifying a custom resolver function for the registry plugin.</li>
+    </ul>
+
+    <p>
+      <b class="header">0.7.6</b> &mdash; <small><i>June 29, 2014</i></small> &mdash; <a href="https://github.com/tgriesser/bookshelf/compare/0.7.5...0.7.6">Diff</a><br />
+      Add <tt>omitPivot</tt> flag on toJSON options for omitting the <tt>_pivot_</tt> keys in <tt>through</tt> and
+      <tt>belongsToMany</tt> relations (#404).
+    </p>
+
+    <p>
+      <b class="header">0.7.5</b> &mdash; <small><i>June 23, 2014</i></small> &mdash; <a href="https://github.com/tgriesser/bookshelf/compare/0.7.4...0.7.5">Diff</a><br />
       Fix missing NotFoundError &amp; EmptyError on Model &amp; Collection, respectively (#389, 399).
     </p>
 
@@ -2666,7 +2769,7 @@ user.fetch({withRelated: ['accounts', {
   <script src="/docs/assets/highlight.min.js"></script>
   <script src="docs/assets/ga.js" charset="utf-8"></script>
   <script src="docs/assets/jquery.min.js"></script>
-  <script src="/browser/deps.js"></script>
+  <script src="/browser/knex.js"></script>
   <script src="/browser/bookshelf.js"></script>
 
   <script>
@@ -2675,7 +2778,7 @@ user.fetch({withRelated: ['accounts', {
   });
   hljs.initHighlightingOnLoad();
 
-  var knex = require('knex')({client: 'websql'});
+  var knex = Knex({client: 'websql'});
   var bookshelf = Bookshelf(knex);
 
   // Don't show the full change log.
